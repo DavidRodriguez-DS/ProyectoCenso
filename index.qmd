@@ -1,40 +1,136 @@
 ---
-title: "ProyectoCenso"
+title: "Proyecto Censo"
+subtitle: "Informe"
+author:
+  - name: "María José Díaz, David Rodríguez y Fernando Sepúlveda"
+date: "`r Sys.Date()`"
+lang: es
+format:
+  html:
+    title-block-banner: "#ffffff"
+    smooth-scroll: true
+    toc: true 
+    toc-depth: 6
+    toc-location: right 
+    number-sections: true 
+    number-depth: 6 
+    code-fold: true 
+    #bibliography: ref.bib
+    #csl: apa-numeric-superscript.csl
+    theme: cosmo 
+    fig-cap-location: bottom 
+    css: styles.css
+execute:
+  python: true
+  warning: false
+  message: false
+  fig-width: 8 #Formato de la figura
+  fig-height: 6
 ---
 
-```{r}
-#Limpiamos nuestro entorno
+```{r results='hide'}
+# Taller N° 2, Díaz, Rodríguez y Sepúlveda
+
+# Limpiamos nuestro entorno
 
 rm(list = ls())
 
-#Activamos el renv para guardar información de los paquetes utilizados
+# Activamos el renv para guardar información de los paquetes utilizados
 if(!require(renv)){install.packages("renv")}
 library(renv)
 
-#iniciamos el renv
+# Iniciamos el renv
 
 renv::init()
 
+# Activamos función para instalar paquetes
 
-#Instalamos y activamos paquete a utilizar
-if(!require(rio)){install.packages("rio")}
-library(rio)
-if(!require(dplyr)){install.packages("dplyr")}
-library(dplyr)
+install_and_load <- function(package) {
+  if (!require(package, character.only = TRUE)) {
+    utils::install.packages(package)
+    library(package, character.only = TRUE)
+  }
+}
 
-#Actualizamos paquetes instalados en el renv 
+# Lista de paquetes a ser instalados y cargados
+
+packages <- c("rio","dplyr", "ggplot2", "RColorBrewer", "kableExtra", "ggcorrplot", "latex2exp","broom")
+
+# Aplicamos la función a cada paquete
+
+invisible(capture.output(sapply(packages, install_and_load)))
+
+# Actualizamos paquetes instalados en el renv
 
 renv::snapshot()
 
-#IMPORTANTE: La bbdd que utilizaremos a continuación es una muestra ya recodificada del CENSO. Esto con el fin de poder utilizarla en Collab y Github, ya que la BBDD del Censo de por sí es muy pesada para dichas plataformas.
+```
+
+
+# Introducción
+
+El presente proyecto se basa en una simulación relacionada con la falta de respuesta al CENSO 2017. A partir de esta base de datos, se seleccionó una muestra considerando las dimensiones de región, comuna, provincia, área, sexo, edad, nivel educacional, pertenencia a pueblos originarios y escolaridad, con el objetivo de predecir los comportamientos asociados a la no respuesta en dicho censo.
+
+```{r}
+# IMPORTANTE: La bbdd que utilizaremos a continuación es una muestra del CENSO 2017.
+# Esto con el fin de poder utilizarla en Collab y Github, ya que la BBDD original
+# del Censo de por sí es muy pesada para dichas plataformas. De tal manera,
+# se configuró una muestra aleatoria del 10% de la población por cada región,
+# resguardando que los estadísticos de cada variable no se alteren mayormente.
+# El código con el que hicimos la muestra obtenida desde el CENSO es el siguiente:
+
+# censo <- read.csv(ruta_archivo, sep = ";", dec = ".", header = TRUE,
+#                  stringsAsFactors = FALSE)
+
+# muestra <- censo %>%
+# group_by(REGION) %>%
+# sample_frac(0.10) %>%
+# ungroup()
+
+# Comprobamos que los nombres de la BBDD original se mantienen en la BBDD
+# simplificada
+
+# names(muestra)
+
+# Realizamos un subset de datos, conservando sólo las variables más relevantes
+# para el análisis posterior.
+
+#muestra <- select(muestra, REGION, PROVINCIA, COMUNA, AREA,
+#                P08, P09, P15, P16, ESCOLARIDAD)
 
 # URL del archivo
 url_archivo <- "https://github.com/DavidRodriguez-DS/ProyectoCenso/raw/refs/heads/master/_data/muestra.sav"
 
-#Descargamos nuestra BBDD de muestra
+# Descargamos nuestra BBDD de muestra
 muestra <- import(url_archivo)
 
 # Recodificación de variables
+
+# A partir de esta recodificación, le cambiamos el nombre a algunas de nuestras
+# variables de interés (P08, P09, P15 y P16). Se busca que las nuevas etiquetas
+# de tales variables representen con mayor claridad el tipo de datos que se
+# almacenan dentro de nuestras variables, facilitando el análisis posterior
+# de nuestros datos.
+
+# Análogamente, se procede a recodificar nuestras variables, resguardando
+# que las nuevas categorías generadas representen más claramente el sentido
+# de cada subgrupo de nuestras variables de interés. Así, por ejemplo,
+# vemos que en la variable que representa la territorialidad del levantamiento
+# de la información censal ("AREA"), a la primera categoría se le denomina
+# como "Urbano", mientras que a la segunda categoría como "Rural"
+
+# Observando el mismo procedimiento, pero con variables de tipo numérico,
+# vemos que la nueva variable "P_INDIGENA" - que en la base original figuraba
+# como "P16", opta por catalogar a todas las personas que respondieron sí
+# pertenecer a algún pueblo indígena chileno como 1 - sí ocurrencia del
+# fenómeno de interés -, mientras que a aquellas personas que aseveraron
+# no pertenecer al subgrupo de población indígena de nuestro país, se las
+# identificó con un 0, que implica la no ocurrencia del fenómeno de interés,
+# en este caso, pertenencia a población indígena.
+
+# La razón para asignar valores de 1 y 0 a esta variable reside en la posibilidad
+# de ocupar esta variable, posteriormente, en modelos predictivos de respuesta/
+# no respuesta del CENSO 2017, mediante modelos de regresión lineal y logística.
 
 muestra_rec <- muestra %>%
   mutate(
@@ -58,16 +154,21 @@ muestra_rec <- muestra %>%
   select(-P08, -P09, -P15, -P16)  # Elimina las variables originales
 
 
-# Tasa nacional de no respuesta
+# Frecuencia de no respuesta por región
 
 table(muestra_rec$REGION)
 
-# Tenemos los datos de personas por región. Con tal información, empezamos a
-# Diseñar nuestra variable de No Respuesta
+# Como podemos observar, ya tenemos los datos de personas por región.
+# Con tal información, comenzamos a estructurar nuestra variable de No Respuesta
+# del CENSO.
 
-poblacion_region <- c(33056, 60753, 28617, 75759, 181590, 91456, 104495, 155680, 95722, 82871, 10316, 16653, 711281, 38484, 22607, 48061) #Poblacion por region al reducir a un 10% nuestra BBDD.
+poblacion_region <- c(33056, 60753, 28617, 75759, 181590, 91456, 104495, 155680, 95722, 82871, 10316, 16653, 711281, 38484, 22607, 48061)
 
-tasa_no_respuesta_nacional <- 0.047 #Esto lo estima el INE...
+# Se define una tasa de no respuesta que se aproxime al 4,7%. Ello en base
+# a proyecciones realizadas por INE, respecto a la tasa de omisión del
+# CENSO 2017 (https://www.latercera.com/pulso/noticia/tan-bueno-fue-censo-2017-tasa-omision-llego-47-845-mil-personas-no-fueron-contabilizadas/452564/)
+
+tasa_no_respuesta_nacional <- 0.047
 
 poblacion_total <- sum(poblacion_region)
 
@@ -75,13 +176,35 @@ total_no_respuesta_ponderada <- tasa_no_respuesta_nacional * poblacion_total
 
 # Tasas de no respuesta por región
 
+# A continuación, se genera un DF con información respecto a la tasa de omisión
+# por cada región.
+
 tasas_no_respuesta_regionales <- poblacion_region * (tasa_no_respuesta_nacional / poblacion_total)
 tasas_regionales <- data.frame(REGION = 1:16, POBLACION = poblacion_region, TASA_NO_RESPUESTA = tasas_no_respuesta_regionales)
+
+# Finalmente, se añaden las tasas de omisión por región a nuestra base de datos
+# "muestra_rec"
 
 muestra_rec <- muestra_rec %>%
   left_join(tasas_regionales, by = "REGION")
 
 # Asignación de pesos
+
+# A partir del siguiente código, se le asignan cierto pesos a cada categoría
+# de nuestras principales variables de interés. De tal forma, se indica, por ejemplo
+# que en caso de censar a personas en área rural, estas tengan mayor probabilidad
+# de no responder el CENSO. De igual manera, se indica que aquellas personas
+# con menor nivel de escolaridad, tengan mayores probabilidades de no responder.
+# Finalmente, se indica que si la persona a encuestar es un hombre, este tenga
+# mayores posibilidades de no responder el CENSO.
+
+# De tal manera, se construye un código a partir del cual se generará una
+# distribución aleatoria de la no respuesta, aunque controlando el resultado
+# mediante pesos asignados a las categorías de nuestras variables de interés.
+
+# Tal decisión se ejecutó a partir de la revisión de evidencia, que muestra
+# que la probabilidad de no responder el CENSO, junto a encuestas y otro tipo
+# de mediciones, varía según ciertos atributos de la población.
 
 muestra_rec <- muestra_rec %>%
   mutate(
@@ -99,6 +222,10 @@ muestra_rec <- muestra_rec %>%
   mutate(PESO_TOTAL = PESO_AREA * PESO_EDAD * PESO_ESCOLARIDAD * PESO_GENERO)
 
 # Simulación de no respuesta
+
+# En este punto, generamos una simulación de la no respuesta, añadiendo la
+# Columna "NO_RESPUESTA" a nuestra BBDD.
+
 set.seed(123)
 muestra_rec <- muestra_rec %>%
   mutate(PROB_NO_RESPUESTA = pmin(tasa_no_respuesta_nacional * PESO_TOTAL, 1),
@@ -106,29 +233,47 @@ muestra_rec <- muestra_rec %>%
 
 table(muestra_rec$NO_RESPUESTA)
 
+# Las frecuencias de no respuesta y respuesta al CENSO son corresponde,
+# aproximadamente, a los siguientes valores:
+
 # Sí respuesta: 1.638.591
 # No respuesta: 118.810
 
-#La simulacion de la no respuesta varía
+# Es importante establecer que los números pueden variar ligeramente al ejecutar
+# el código de creación de la variable que representa a la no respuesta, lo que
+# se debe a la configuración inicial aleatoria de este, a partir del comando
+# "set.seed(123)".
 
-# Análisis por región y área
+# A continuación, se procede a construir los análisis de no respuesta y cómo
+# esta varía a partir de nuestras variables de interés.
+
+# Análisis por región, área y edad
 
 tasa_nacional_simulada <- mean(muestra_rec$NO_RESPUESTA)
 
-# Resumen por región
+# Resumen por región: generamos un DF para graficar, próximamente,
+# la variación de la tasa de no respuesta por región
 
 tasas_regionales_simuladas <- muestra_rec %>%
   group_by(REGION) %>%
   summarise(TASA_SIMULADA = mean(NO_RESPUESTA))
 
-# Resumen por área
+# Resumen por área:  generamos un DF para graficar, próximamente,
+# la variación de la tasa de no respuesta por área (urbano/rural)
 
 tasa_por_area <- muestra_rec %>%
   group_by(AREA) %>%
   summarise(TASA_NO_RESPUESTA = mean(NO_RESPUESTA))
 
+# Resumen por grupo etario: generamos un DF para graficar, próximamente,
+# la variación de la tasa de no respuesta por grupo etario
 
-# Calculamos la cantidad de NO_RESPUESTA por región
+tasa_por_edad <- muestra_rec %>%
+  group_by(EDAD) %>%
+  summarise(TASA_NO_RESPUESTA = mean(NO_RESPUESTA == 1))
+
+# Como una muestra de la visualización gráfica que se observará próximamente,
+# se construye una tabla donde se observa la cantidad de NO_RESPUESTA por región
 
 no_respuesta_por_region <- muestra_rec %>%
   filter(NO_RESPUESTA == 1) %>%
@@ -166,15 +311,21 @@ no_respuesta_por_region <- muestra_rec %>%
   group_by(REGION) %>%
   summarise(NO_RESPUESTA = n())
 
-if(!require(kableExtra)){install.packages("kableExtra")}
-library(kableExtra)
-renv::snapshot()
-
 no_respuesta_por_region %>%
   kable(caption = "Cantidad de No Respuestas por Región") %>%
   kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),
                 full_width = F,
                 position = "center")
+
+# Frente a la cantidad de no respuesta por Region,
+# se moldearon aquellas variables anteriormente mencionadas para obtener
+# sus tasas de no respuesta ponderada del 10% de la muestra total.
+# Ante estos datos, es posible verificar que las regiones asociadas al área rural tienden
+# a tener una mayor tasa de no respuesta a comparación del área urbana, siendo por ejemplo,
+# la región Metropolitana una de ellas. Esta situación podría deberse, en gran parte por la densidad poblacional existente,
+# la cual es bastante mayor al área rural. Sumado a esto, existen distintas causas
+# para explicar ésta diferencia, la cual se profundizará más adelante en los distintos gráficos y tablas a mostrar.
+
 
 # Gráficos
 ## Distribución de No Respuesta por Región
@@ -185,7 +336,9 @@ tasas_regionales_simuladas <- muestra_rec %>%
   group_by(REGION) %>%
   summarise(TASA_SIMULADA = mean(NO_RESPUESTA))
 
-# Reordenar la variable REGION para que las regiones aparezcan en el orden deseado
+# Reordenamos la variable REGION para que sus categorías (las regiones)
+# aparezcan en el orden deseado
+
 tasas_regionales_simuladas$REGION <- factor(tasas_regionales_simuladas$REGION,
                                             levels = c("Región de Tarapacá", "Región de Antofagasta", "Región de Atacama",
                                                        "Región de Coquimbo", "Región de Valparaíso", "Región de O´Higgins",
@@ -194,92 +347,102 @@ tasas_regionales_simuladas$REGION <- factor(tasas_regionales_simuladas$REGION,
                                                        "Región Metropolitana", "Región de Los Ríos", "Región de Arica y Parinacota",
                                                        "Región de Ñuble"))
 
-if(!require(ggplot2)){install.packages("ggplot2")}
-library(ggplot2)
-
-
-if(!require(RColorBrewer)){install.packages("RColorBrewer")}
-library(RColorBrewer)
-
-renv::snapshot()
-
-#Cambiar colores
+# Creamos gráfico para poder visualizar la tasa simulada de no respuesta por región
 
 ggplot(tasas_regionales_simuladas, aes(x = REGION, y = TASA_SIMULADA, fill = REGION)) +
   geom_bar(stat = "identity", show.legend = FALSE) +
   labs(title = "Tasas de No Respuesta por Región",
        x = "Región",
        y = "Tasa de No Respuesta") +
+         scale_fill_viridis_d(option = "D") +
   theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotar nombres de las regiones para mejor visibilidad
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
+# Ante estos resultados, es posible apreciar la diferencia de tasas de no respuesta por cada
+# región para el presente Censo 2017. Como bien se mencionó con anterioridad, las regiones rurales
+# son aquellas que lideran las barras del gráfico, siendo la región de la Araucanía,
+# de los Ríos, Ñuble y después Maule, quienes más casos de tasas de no respuesta presentan.
+# Por el contrario, la región de Antofagasta, luego la Metropolitana y después Tarapacá
+# son aquellas que menos casos presenta de tasas de no respuesta.
 
-## Tasa de No Respuesta por Área
-
-#Ver el tema de la tasa de no respuesta
+# Construimos nuestro gráfico de No Respuesta por Área
 
 ggplot(tasa_por_area, aes(x = AREA, y = TASA_NO_RESPUESTA, fill = AREA)) +
   geom_bar(stat = "identity") +
   labs(title = "Tasa de No Respuesta por Área", x = "Área", y = "Proporción de No Respuesta") +
   theme_minimal() +
-  scale_fill_manual(values = c("Rural" = "red", "Urbano" = "blue"))  # Colores personalizados para cada área
+  scale_fill_manual(values = c("Rural" = "forestgreen", "Urbano" = "darkgrey"))
 
+# Frente a estos resultados por área Rural y Urbana, se justifica lo anteriormente mencionado
+# con respecto las regiones censadas. Ante esto, las zonas rurales presentan mayor tasa de no respuesta
+# en comparación que la urbana. Esto es posible compararlo con los porcentajes de respuestas censadas
+# en donde, "un 87,7% de la población total habita en áreas urbanas, en tanto que 12,2%
+# vive en zonas rurales" (Censo, 2017) Si bien, existe un alto porcentaje de población que fue censada
+# durante el año 2017, a pesar de ello, existe una alta diferencia de población que no respondió dicha encuesta,
+# tal como se aprecia el gráfico, dando cuenta de una importancia a la proporción de personas que
+# no han podido ser consideradas dentro del Censo.
 
-## Tasa de No Respuesta por Edad
+# Tasa de No Respuesta por Edad
 
-# Crear el data frame de tasa de no respuesta por grupo etario
-tasa_por_edad <- muestra_rec %>%
-  group_by(EDAD) %>%
-  summarise(TASA_NO_RESPUESTA = mean(NO_RESPUESTA == 1))  # Proporción de no respuesta (1) por grupo etario
+# Reordenamos la variable EDAD para que los grupos aparezcan desde el más joven
+# hasta el grupo de mayor edad
 
-# Reordenar la variable EDAD para que los grupos aparezcan en el orden deseado
 tasa_por_edad$EDAD <- factor(tasa_por_edad$EDAD, levels = c("Joven/Adulto Joven", "Adulto", "Adulto Mayor"))
 
-# Graficar la tasa de no respuesta por edad
+# Graficamos la tasa de no respuesta por edad
+
 ggplot(tasa_por_edad, aes(x = EDAD, y = TASA_NO_RESPUESTA, fill = EDAD)) +
   geom_bar(stat = "identity") +
   labs(title = "Tasa de No Respuesta por Edad", x = "Grupo Etario", y = "Proporción de No Respuesta") +
   theme_minimal() +
   scale_fill_brewer(palette = "Set3")  # Colores agradables para el gráfico
 
+# Ante los datos presentados, es posible visualizar que las personas dentro del rango etario "Adulto Mayor"
+# tienden a presentar una mayor tasa de no respuesta, seguida de "Joven/Adulto Joven",
+# y finalmente, siendo la última el grupo "Adulto". Frente a estas respuestas,
+# preliminarmente es posible concluir que el grupo de "Adultos Mayores" podría presentar
+# una tasa de no respuesta más alta debido a dificultades tecnológicas, menor interés en el Censo o bien,
+# una dificultad de acceso a la llegada de recopilación de datos a éste grupo por parte del presente Censo.
+# Sumado a esto, también es posible comprender una mayor tasa de no respuesta debido a que la sociedad chilena
+# cada vez es más adulta a comparación de los censo del año 2002 y 1992 respectivamente.
+# Por ejemplo, tal como indican los resultados del Censo 2017 "Chile continúa con
+# un proceso de envejecimiento de su población. El porcentaje de personas de 65 años o más
+# pasó de 6,6% en 1992 a 11,4% en 2017" Misma situación que podría compararse con
+# la disminución de tasas de natalidad y mortalidad en mayor medida dentro de América Latina,
+# a raíz de la misma sintesis de resultados del censo 2017.
 
 # Correlaciones y regresiones
 
-# Convertimos solo las variables necesarias
+# En primer lugar, convertimos solo las variables necesarias a numéricas
 
 muestra_rec <- muestra_rec %>%
   mutate(
-    # Convertir SEXO a numérico (Mujer = 1, Hombre = 2). 
+    # Convertimos SEXO a numérico (Mujer = 1, Hombre = 2).
     SEXO_NUM = ifelse(SEXO == "Hombre", 1, 2),
 
-    # Convertir EDAD a numérico (Joven/Adulto Joven = 1, Adulto = 2, Adulto Mayor = 3)
+    # Convertimos EDAD a numérico (Joven/Adulto Joven = 1, Adulto = 2, Adulto Mayor = 3)
     EDAD_NUM = case_when(
       EDAD == "Joven/Adulto Joven" ~ 1,
       EDAD == "Adulto" ~ 2,
       EDAD == "Adulto Mayor" ~ 3
     ),
 
-    # Convertir AREA a numérico (Urbano = 1, Rural = 2)
+    # Convertimos AREA a numérico (Urbano = 1, Rural = 2)
     AREA_NUM = ifelse(AREA == "Urbano", 1, 2)
   )
 
-# Verificamos la estructura de los datos
-str(muestra_rec)
 
-# Crear un dataset con las variables que necesitamos para el análisis de correlación
+# A continuación, creamos un dataset con las variables que necesitamos para
+# el análisis de correlación
+
 data_correlacion <- muestra_rec %>%
   select(NO_RESPUESTA, SEXO_NUM, EDAD_NUM, AREA_NUM, N_EDUC, ESCOLARIDAD)
 
 # Calculamos la matriz de correlación
+
 correlation_matrix <- cor(data_correlacion, use = "complete.obs")
 
-# Cargar librería ggcorrplot para graficar la matriz de correlación
-if(!require(ggcorrplot)){install.packages("ggcorrplot")}
-library(ggcorrplot)
-
-renv::snapshot()
-
-# Generar la matriz de correlación con ggcorrplot
+# Generamos la matriz de correlación con ggcorrplot
 ggcorrplot(correlation_matrix,
            lab = TRUE,        # Mostrar los valores de correlación
            type = "lower",    # Mostrar solo la parte inferior de la matriz
@@ -287,10 +450,16 @@ ggcorrplot(correlation_matrix,
            colors = c("blue", "white", "red"),  # Colores de la matriz
            title = "Matriz de Correlación entre la Tasa de No Respuesta y Variables")
 
+# Con respecto a los datos presentados en nuestra matriz de correlación, es posible visualizar
+# que la variable N_EDUC (Nivel Educativo), presenta una correlación positiva alta de 0.91, concluyendo en que
+# a medida que aumentan los niveles educacionales de las personas, también aumentan los niveles de
+# tasa de no respuesta en una misma proporción. Por el contrario, se observa una correlación negativa
+# con AREA_NUM(Área), dando cuenta de que a medida que aumenta la variable de área,
+# siendo ésta urbana y/o rural la tasa de no respuesta disminuye.  Ahora bien, las variables
+# como EDAD_NUM y SEXO_NUM presentan una correlación de 0,16 y 0,01 respectivamente,
+# dando cuenta de la inexistencia de correlación de estas variables con la tasa de no respuesta del Censo 2017.
 
-
-
-# Ajustar el modelo de regresión logística con todos los datos
+# A continuación, ajustamos el modelo de regresión logística con todos los datos
 logit_model <- glm(NO_RESPUESTA ~ SEXO_NUM + EDAD_NUM + AREA_NUM + N_EDUC + ESCOLARIDAD,
                    data = muestra_rec,
                    family = "binomial")
@@ -298,58 +467,54 @@ logit_model <- glm(NO_RESPUESTA ~ SEXO_NUM + EDAD_NUM + AREA_NUM + N_EDUC + ESCO
 # Resumen del modelo de regresión logística
 summary(logit_model)
 
-# Extraer el resumen del modelo
-logit_summary <- summary(logit_model)
+# Extraemos los resultados del modelo en formato de tabla
+logit_summary <- tidy(logit_model)
 
-# Extraer los coeficientes y sus estadísticas
-coefficients <- logit_summary$coefficients
-coefficients_df <- as.data.frame(coefficients)
-colnames(coefficients_df) <- c("Estimate", "Std. Error", "z value", "Pr(>|z|)")
+# Se muestra tabla de modelo de regresión logística
+logit_summary %>%
+  kable(caption = "Resumen del Modelo de Regresión Logística") %>%
+  kable_styling(bootstrap_options = c("striped","hover"))
 
-# Crear una tabla bonita con kableExtra
-coefficients_df %>%
-  kable("html", caption = "Resumen del Modelo de Regresión Logística") %>%
-  kable_styling(bootstrap_options = c("striped", "hover", "responsive"),
-                full_width = F, position = "center") %>%
-  column_spec(1, bold = TRUE) %>%
-  column_spec(2, color = "blue") %>%
-  column_spec(3, color = "green") %>%
-  column_spec(4, color = "red")
+
+# Respecto a los coeficientes de regresión, podemos establecer que:
+
 # 1. Sexo (SEXO_NUM)
-# Coeficiente: -0.209
-# Interpretación: El coeficiente negativo sugiere que los hombres tienen una
+# Coeficiente: -0.198
+# El coeficiente negativo sugiere que los hombres tienen una
 # mayor probabilidad de no responder al censo en comparación con las mujeres.
-# En términos simples, ser hombre aumenta la probabilidad de no contestar el censo.
+
+# Así, ser hombre aumenta la probabilidad de no contestar el censo.
 # Este hallazgo es estadísticamente significativo, por lo que hay una relación clara entre sexo y la probabilidad de no responder.
 
 # 2. Edad (EDAD_NUM)
-# Coeficiente: 0.144443
-# Interpretación: Este coeficiente positivo indica que, a medida que aumenta
+# Coeficiente: 0.146
+# Este coeficiente positivo indica que, a medida que aumenta
 # la edad, la probabilidad de no responder al censo aumenta.
-# Los jóvenes (código 1) tienen una menor probabilidad de no responder que
+# Los jóvenes (categoría 1) tienen una menor probabilidad de no responder que
 # los adultos y adultos mayores, quienes tienden a no responder más frecuentemente.
 # Por lo tanto, las personas mayores tienen más probabilidades de no responder que las personas más jóvenes.
 
 # 3. Área (AREA_NUM)
-# Coeficiente: 0.441384
-# Interpretación: El coeficiente positivo indica que vivir en un área rural
+# Coeficiente: 0.44
+# El coeficiente positivo indica que vivir en un área rural
 # aumenta la probabilidad de no responder al censo en comparación con vivir
 # en un área urbana. Este hallazgo sugiere que las personas que viven en áreas
 # rurales son más propensas a no responder al censo que las que viven en áreas urbanas.
 
 # 4. Nivel educativo (N_EDUC)
-# Coeficiente: 0.037353
-# Interpretación: El coeficiente positivo indica que a medida que aumenta
+# Coeficiente: 0.035
+# El coeficiente positivo indica que a medida que aumenta
 # el nivel educativo, también aumenta la probabilidad de no responder al censo.
 #  Sin embargo, este coeficiente es relativamente pequeño, lo que sugiere que
 # la relación entre nivel educativo y no respuesta no es muy fuerte, pero sigue siendo significativa.
 
 # 5. Años de escolaridad (ESCOLARIDAD)
-# Coeficiente: -0.063536
-# Interpretación: El coeficiente negativo indica que, a medida que aumentan los
+# Coeficiente: -0.06
+# El coeficiente negativo indica que, a medida que aumentan los
 # años de escolaridad, disminuye la probabilidad de no responder al censo.
 # En otras palabras, las personas con más años de educación tienden a responder
 # más al censo que aquellas con menos años de escolaridad.
+
 # Predicción de probabilidades de no responder en todos los registros
 muestra_rec$pred_logit <- predict(logit_model, newdata = muestra_rec, type = "response")
 
@@ -362,36 +527,49 @@ coef_logit_df <- coef_logit_df[order(coef_logit_df$Estimate), ]  # Ordenar por c
 # Gráfico de coeficientes (regresión logística)
 ggplot(coef_logit_df, aes(x = reorder(Variable, Estimate), y = Estimate)) +
   geom_bar(stat = "identity", fill = "steelblue") +
-  labs(title = "Importancia de las Variables en la Regresión Logística",
+  labs(title = "Relevancia de Variables en Modelo de Regresión Logística",
        x = "Variables",
-       y = "Coeficiente") +
-  coord_flip() +  # Girar los nombres de las variables para mejor visualización
+       y = "Magnitud Coeficiente") +
+  coord_flip() +
   theme_minimal()
+
+# Dentro de una regresión logística, los coeficientes representan el cambio
+# en el logaritmo de las probabilidades de que ocurra el evento, en este caso,
+# de que una persona no haya sido censada dentro de nuestra variable denominada tasa de no respuesta.
+# Por tanto, nuestro modelo de regresión logística, nos indica la relevancia de nuestras variables,
+# según su tasa de no respuesta censal. A raíz de los coeficientes de las variables ya mencionados,
+# y es posible dar cuenta que el Área (AREA_NUM) es nuestra variable con mayor coeficiente positivo,
+# sugeriendo que a medida que uno viva en área rurales, aumenta significativamente la probabilidad de no responder el censo.
+# Seguida de ésta variable, la edad (EDAD_NUM) también posee un coeficiente positivo, indicandonos que a medida que la edad
+# aumenta, también la probabilidad de no responder. Luego, en tercer lugar el nivel educativo (N_EDUC) también
+# con un coeficiente positivo, aunque no tan alta como las variables anteriores, pero aún asi de manera significativa.
+# Por el contrario, la escolaridad y después el sexo (SEXO_NUM), presentan coeficientes negativos respectivamente,
+# indicando que a medida que aumenta la escolaridad, o una persona es de sexo "hombre", disminuyen las probabilidades
+# de no ser censados.
+# A modo general, nuestro modelo nos indica que el área de residencia (rural/urbano) y la edad, son los factores
+# que más influyen al momento de predecir la probabilidad de no responder el Censo. Mientras que, las personas
+# con más escolaridad y las mujeres, poseen una menor probabilidad de no respuesta.
+# Asimismo, aunque nuestro nivel educativo tiene un efecto dentro del modelo, su magnitud es relativamente
+# pequeña a comparación del área y la edad, donde estas ultimas variables tiene mayor peso al momento de hacer un análisis al modelo.
 
 # Mostrar las primeras predicciones de probabilidad de no respuesta
 head(muestra_rec$pred_logit)
 
-# Visualización de las probabilidades predichas (Ejemplo: Probabilidades de no responder el censo)
+# Visualización de las probabilidades predichas (Probabilidades de no responder el censo)
 ggplot(muestra_rec, aes(x = pred_logit)) +
   geom_histogram(binwidth = 0.05, fill = "lightblue", color = "black", alpha = 0.7) +
   labs(title = "Distribución de las Probabilidades Predichas de No Responder",
-       x = "Probabilidad de No Responder",
+       x = "Probabilidad de No Responder (%)",
        y = "Frecuencia") +
+  scale_x_continuous(labels = scales::percent_format(accuracy = 1)) +
   theme_minimal()
 
+# A modo de conclusión, la probabilidad predicha de no haber respondido el Censo 2017, se concentra
+# dentro del 5% (mayor a 1.000.000 pero menor a 1.250.000 de personas), prediciendo que existe
+# una baja probabilidad de no responder la presenta encuesta, seguida de un 10% ( menos que 500.000 pero más que
+# 250.000 personas) y finalmente, un 15% muy debajo de las 250.000
+# Ante esto, es posible dar cuenta que la frecuencia disminuye a medida que aumenta la probabilidad predicha
+# de no responder, indicando que es un evento poco común al respecto.
 
 renv::snapshot()
-
-#-------------------------------------------------------------------
-# Tareas
-
-# 1. Realizar análisis descriptivo mostrando diferencias en tasa de respuesta/
-# no respuesta por territorialidad (urbano/rural), región, provincia o comuna,
-# variables sociodemográficas en general. Incluir gráficos.
-
-# 2. Repasar clases para no morir en el intento de generar trabajo replicable/
-# reproducible.
-
-# 3. Avanzar rápido para no pasar año nuevo en R
 ```
-
