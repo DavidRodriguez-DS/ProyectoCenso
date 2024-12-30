@@ -1,5 +1,6 @@
 project:
   type: website
+  output-dir: docs
 
 website:
   title: "ProyectoCenso"
@@ -14,6 +15,6 @@ format:
     theme: cosmo
     css: styles.css
     toc: true
+    bibliography: ref.bib
 
 editor: visual
-

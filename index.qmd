@@ -17,8 +17,8 @@ format:
     number-sections: true 
     number-depth: 6 
     code-fold: true 
-    #bibliography: ref.bib
-    #csl: apa-numeric-superscript.csl
+    bibliography: ref.bib
+    csl: apa-numeric-superscript.csl
     theme: cosmo 
     fig-cap-location: bottom 
     css: styles.css
@@ -26,9 +26,33 @@ execute:
   python: true
   warning: false
   message: false
-  fig-width: 8 #Formato de la figura
+  fig-width: 8 
   fig-height: 6
 ---
+  
+```{css}
+
+body {
+  font-family: Arial, sans-serif;
+  line-height: 1.5;
+}
+
+h1 {
+  color: #333333;
+}
+
+p {
+  text-align: justify;
+}
+
+```
+
+# Introducción
+
+El presente proyecto se basa en una simulación relacionada con la falta de respuesta al CENSO 2017. A partir de esta base de datos, se seleccionó una muestra [^1] considerando las dimensiones de región, comuna, provincia, área, sexo, edad, nivel educacional, pertenencia a pueblos originarios y escolaridad, con el objetivo de predecir los comportamientos asociados a la no respuesta en dicho censo.
+
+[^1]: Los datos utilizados en este análisis provienen de una muestra representativa del Censo 2017. Esta muestra fue diseñada para facilitar su uso en plataformas como Google Colab y GitHub, dado que la base de datos original del Censo excede las capacidades de estas herramientas. Para construirla, se seleccionó aleatoriamente el 10% de la población de cada región, garantizando que los principales estadísticos de las variables se mantuvieran representativos y no presentaran alteraciones significativas. El código empleado para generar esta muestra está documentado en el código general de esta página web.
+
 
 ```{r results='hide'}
 # Limpiamos nuestro entorno
@@ -54,7 +78,7 @@ install_and_load <- function(package) {
 
 # Lista de paquetes a ser instalados y cargados
 
-packages <- c("rio","dplyr", "ggplot2", "RColorBrewer", "kableExtra", "ggcorrplot", "latex2exp","broom")
+packages <- c("rio", "dplyr", "ggplot2", "RColorBrewer", "kableExtra", "ggcorrplot", "latex2exp","broom", "knitr")
 
 # Aplicamos la función a cada paquete
 
@@ -64,30 +88,7 @@ invisible(capture.output(sapply(packages, install_and_load)))
 
 renv::snapshot()
 
-```
 
-```{css}
-
-body {
-  font-family: Arial, sans-serif;
-  line-height: 1.5;
-}
-
-h1 {
-  color: #333333;
-}
-
-p {
-  text-align: justify;
-}
-
-```
-
-# Introducción
-
-El presente proyecto se basa en una simulación relacionada con la falta de respuesta al CENSO 2017. A partir de esta base de datos, se seleccionó una muestra considerando las dimensiones de región, comuna, provincia, área, sexo, edad, nivel educacional, pertenencia a pueblos originarios y escolaridad, con el objetivo de predecir los comportamientos asociados a la no respuesta en dicho censo.
-
-```{r results='hide'}
 # Nota Importante: Los datos utilizados en este análisis corresponden a una muestra del Censo 2017. 
 # Esta muestra fue generada con el propósito de facilitar su manejo en plataformas como Google Colab y GitHub, 
 # ya que la base de datos original del Censo es demasiado pesada para estas herramientas. 
@@ -241,7 +242,9 @@ muestra_rec <- muestra_rec %>%
   mutate(PESO_TOTAL = PESO_AREA * PESO_EDAD * PESO_ESCOLARIDAD * PESO_GENERO)
 ```
 
-# Simulación de no respuesta
+# Simulación de respuesta y no respuesta
+
+  A continuación, se presenta una simulación de las respuestas y no respuestas en comparación con los datos del CENSO, basada en la tasa nacional de no respuesta. Esta simulación calcula la probabilidad de no respuesta del CENSO.
 
 ```{r}
 # En este punto, generamos una simulación de la no respuesta, añadiendo la
@@ -252,13 +255,31 @@ muestra_rec <- muestra_rec %>%
   mutate(PROB_NO_RESPUESTA = pmin(tasa_no_respuesta_nacional * PESO_TOTAL, 1),
          NO_RESPUESTA = rbinom(n(), 1, PROB_NO_RESPUESTA))
 
-table(muestra_rec$NO_RESPUESTA)
+# Convertimos la NO_RESPUESTA en un data frame para poder graficarla con kable
+tabla_frecuencias <- as.data.frame(table(muestra_rec$NO_RESPUESTA))
+
+# Cambiamos los valores dentro de la columna "NO_RESPUESTA"
+tabla_frecuencias <- tabla_frecuencias %>%
+  mutate(Var1 = recode(Var1, 
+                      `0` = "Responde", 
+                      `1` = "No responde"))
+
+# Cambiar nombres de las columnas
+colnames(tabla_frecuencias) <- c("Responde/No Responde", "Cantidad")
+
+# Renderizar la tabla con kable
+tabla_frecuencias %>%
+  kbl(caption = "Tabla de simulación de respuesta y no respuesta") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
 ```
 
-  Las frecuencias de no respuesta y respuesta al CENSO son corresponde, aproximadamente, a los siguientes valores:
-  
-1.  Sí respuesta: 1.638.591
-2.  No respuesta: 118.810
+
+
+  Como se puede observar, la simulación de las respuestas (1.638.675) y las no respuestas (118.726) es aproximadamente similar a las frecuencias observadas en el CENSO. Los valores reales son los siguientes:
+
+Respuesta: 1.638.591
+
+No respuesta: 118.810
 
 ```{r}
 # Es importante establecer que los números pueden variar ligeramente al ejecutar
@@ -270,9 +291,9 @@ table(muestra_rec$NO_RESPUESTA)
 # esta varía a partir de nuestras variables de interés.
 ```
 
-# Análisis por región, área y edad
+# Análisis por Región
 
-```{r}
+```{r results='hide'}
 #Región
 
 tasa_nacional_simulada <- mean(muestra_rec$NO_RESPUESTA)
@@ -336,6 +357,8 @@ muestra_rec$REGION <- recode(muestra_rec$REGION,
 ```
 
 ## Tabla de No Respuesta por Región
+
+  A continuación, se presenta una tabla que simula la no respuesta del CENSO por región, utilizando una tasa nacional simulada de no respuesta.
   
 ```{r}
 
@@ -344,6 +367,8 @@ no_respuesta_por_region <- muestra_rec %>%
   filter(NO_RESPUESTA == 1) %>%
   group_by(REGION) %>%
   summarise(NO_RESPUESTA = n())
+
+colnames(no_respuesta_por_region) <- c("Región", "No respuesta")
 
 no_respuesta_por_region %>%
   kable(caption = "Cantidad de No Respuestas por Región") %>%
@@ -358,6 +383,8 @@ no_respuesta_por_region %>%
 
 # Gráficos
 ## Distribución de No Respuesta por Región
+
+A continuación, se presenta el gráfico generado a partir de la simulación de la no respuesta del CENSO, el cual muestra la predicción de la no respuesta por región.
 
 ```{r}
 # Gráfico de barras con las tasas de no respuesta por región
@@ -394,6 +421,8 @@ ggplot(tasas_regionales_simuladas, aes(x = REGION, y = TASA_SIMULADA, fill = REG
 
 ## Distribución de No Respuesta por Área
 
+A continuación, se presenta el gráfico generado a partir de la simulación de la no respuesta del CENSO, el cual muestra la predicción de la no respuesta por área, a saber, urbana o rural.
+
 ```{r}
 
 #Construimos un gráfico de no respuesta por área
@@ -418,6 +447,8 @@ Frente a estos resultados por área Rural y Urbana, se justifica lo anteriorment
 
 
 ## Distribución de No Respuesta por Edad
+
+A continuación, se presenta el gráfico generado a partir de la simulación de la no respuesta del CENSO, el cual muestra la predicción de la no respuesta por edad.
 
 ```{r}
 # Reordenamos la variable EDAD para que los grupos aparezcan desde el más joven
@@ -457,6 +488,8 @@ ggplot(tasa_por_edad, aes(x = EDAD, y = TASA_NO_RESPUESTA, fill = EDAD)) +
 # Correlaciones y regresiones
 ## Matriz de correlación
 
+  A continuación observamos una matriz de correlación entre las diversas variables consideradas en nuestro modelo predictivo (Nivel educacional, Área (Urbano/Rural), Edad y Sexo), las cuales gráfican la influencia de no respuesta de dichas variables sobre la no respuesta.
+
 ```{r}
 # En primer lugar, convertimos solo las variables necesarias a numéricas
 
@@ -475,7 +508,6 @@ muestra_rec <- muestra_rec %>%
     # Convertimos AREA a numérico (Urbano = 1, Rural = 2)
     AREA_NUM = ifelse(AREA == "Urbano", 1, 2)
   )
-
 
 # A continuación, creamos un dataset con las variables que necesitamos para
 # el análisis de correlación
@@ -509,6 +541,8 @@ ggcorrplot(correlation_matrix,
   
 ## Modelo de regresión logística
 
+  A continuación presentamos un modelo de regresión logística con el comportamiento de nuestras variables en relación a la no respuesta.
+
 ```{r}
 # A continuación, ajustamos el modelo de regresión logística con todos los datos
 logit_model <- glm(NO_RESPUESTA ~ SEXO_NUM + EDAD_NUM + AREA_NUM + N_EDUC + ESCOLARIDAD,
@@ -516,12 +550,17 @@ logit_model <- glm(NO_RESPUESTA ~ SEXO_NUM + EDAD_NUM + AREA_NUM + N_EDUC + ESCO
                    family = "binomial")
 
 # Resumen del modelo de regresión logística
-summary(logit_model)
+
 
 # Extraemos los resultados del modelo en formato de tabla
 logit_summary <- tidy(logit_model)
 
+#Cambiamos nombres de variables para mejor visualización
+
+colnames(logit_summary) <- c("Términos", "Estimación", "Error Estándar", "Estadísticos", "P-Valor")
+
 # Se muestra tabla de modelo de regresión logística
+
 logit_summary %>%
   kable(caption = "Resumen del Modelo de Regresión Logística") %>%
   kable_styling(bootstrap_options = c("striped","hover"))
@@ -530,28 +569,31 @@ logit_summary %>%
 -   Respecto a los coeficientes de regresión, podemos establecer que:
 
 1.  Sexo (SEXO_NUM)
-    Coeficiente: -0.198
+    Coeficiente: -0.209
     El coeficiente negativo sugiere que los hombres tienen una mayor probabilidad de no responder al censo en comparación con las mujeres.
     Así, ser hombre aumenta la probabilidad de no contestar el censo. Este hallazgo es estadísticamente significativo, por lo que hay una relación clara entre sexo y la probabilidad de no responder.
 
 2.  Edad (EDAD_NUM)
-    Coeficiente: 0.146
+    Coeficiente: 0.147
     Este coeficiente positivo indica que, a medida que aumenta la edad, la probabilidad de no responder al censo aumenta. Los jóvenes (categoría 1) tienen una menor probabilidad de no responder que los adultos y adultos mayores, quienes tienden a no responder más frecuentemente.
     Por lo tanto, las personas mayores tienen más probabilidades de no responder que las personas más jóvenes.
 
 3.  Área (AREA_NUM)
-    Coeficiente: 0.44
+    Coeficiente: 0.440
     El coeficiente positivo indica que vivir en un área rural aumenta la probabilidad de no responder al censo en comparación con vivir en un área urbana. Este hallazgo sugiere que las personas que viven en áreas rurales son más propensas a no responder al censo que las que viven en áreas urbanas.
 
 4.  Nivel educativo (N_EDUC)
-    Coeficiente: 0.035
+    Coeficiente: 0.041
     El coeficiente positivo indica que a medida que aumenta el nivel educativo, también aumenta la probabilidad de no responder al censo. Sin embargo, este coeficiente es relativamente pequeño, lo que sugiere que la relación entre nivel educativo y no respuesta no es muy fuerte, pero sigue siendo significativa.
 
 5.  Años de escolaridad (ESCOLARIDAD)
-    Coeficiente: -0.06
+    Coeficiente: -0.065
     El coeficiente negativo indica que, a medida que aumentan los años de escolaridad, disminuye la probabilidad de no responder al censo. En otras palabras, las personas con más años de educación tienden a responder más al censo que aquellas con menos años de escolaridad.
+
     
 ### Coeficientes del modelo logístico
+
+  A continuación se presentan los coeficientes del modelo logístico para evaluar la relevancia de las variables en relación con el cambio logarítmico dentro del modelo de regresión logística.
     
 ```{r}
 # Predicción de probabilidades de no responder en todos los registros
@@ -605,11 +647,11 @@ ggplot(coef_logit_df, aes(x = reorder(Variable, Estimate), y = Estimate)) +
 
   A modo general, nuestro modelo nos indica que el área de residencia (rural/urbano), el sexo y la edad, son los factores que más influyen al momento de predecir la probabilidad de no responder el Censo. Así, si la población habita en área rural, se cataloga como hombre y pertenece a un rango etario mayor, aumentan sus probabilidades de no responder el CENSO 2017. En contraste, las variables relacionadas a los años de escolaridad (ESCOLARIDAD) y al nivel educacional (N_EDUC), son las que menor capacidad predictiva tienen.
   
-  # Gráfico sobre posibilidades de no responder el CENSO
+## Gráfico sobre posibilidades de no responder el CENSO
+
+  Finalmente, presentamos un gráfico que muestra las probabilidades de responder al CENSO en función de diversos porcentajes de la población y su probabilidad de respuesta o no respuesta.
 
 ```{r}
-# Mostrar las primeras predicciones de probabilidad de no respuesta
-head(muestra_rec$pred_logit)
 
 # Visualización de las probabilidades predichas (Probabilidades de no responder el censo)
 ggplot(muestra_rec, aes(x = pred_logit)) +
@@ -641,7 +683,13 @@ ggplot(muestra_rec, aes(x = pred_logit)) +
 
   En conclusión, este trabajo contribuye al conocimiento sobre la no respuesta en los censos y destaca la necesidad de diseñar estrategias más efectivas para garantizar la calidad y representatividad de los datos censales. Los resultados obtenidos sirven como punto de partida para futuras investigaciones y para la implementación de políticas públicas más informadas y equitativas.
 
+# Referencias
 
+  - INE. (2018) Sintesis de resultados Censo 2017. https://www.ine.gob.cl/docs/default-source/censo-de-poblacion-y-vivienda/publicaciones-y-anuarios/2017/publicaci%C3%B3n-de-resultados/sintesis-de-resultados-censo2017.pdf?sfvrsn=1b2dfb06_6
+  
+  - CASEN. (2018) Observatorio Social. Metodología de Diseño Muestral. https://observatorio.ministeriodesarrollosocial.gob.cl/storage/docs/casen/2017/Diseno_Muestral_Casen_2017_MDS.pdf
+  
+  - Bianchini, Feney & Singh. (2013) METODOLOGÍA DE TRABAJO, CONCLUSIONES Y RECOMENDACIONES DEL INFORME DE LA COMISIÓN INTERNACIONAL PARA EL CENSO DE POBLACIÓN Y VIVIENDA 2012. https://media.elmostrador.cl/2013/11/resumen_final_expertos_internacionales.pdf
 ```{r results='hide'}
 renv::snapshot()
 ```
