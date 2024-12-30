@@ -61,5 +61,12 @@
     "title": "Proyecto Censo",
     "section": "Notas",
     "text": "Notas\n\n\nLos datos utilizados en este análisis provienen de una muestra representativa del Censo 2017. Esta muestra fue diseñada para facilitar su uso en plataformas como Google Colab y GitHub, dado que la base de datos original del Censo excede las capacidades de estas herramientas. Para construirla, se seleccionó aleatoriamente el 10% de la población de cada región, garantizando que los principales estadísticos de las variables se mantuvieran representativos y no presentaran alteraciones significativas. El código empleado para generar esta muestra está documentado en el código general de esta página web.↩︎"
+  },
+  {
+    "objectID": "about.html",
+    "href": "about.html",
+    "title": "About",
+    "section": "",
+    "text": "About this site\n\n1 + 1\n\n[1] 2"
   }
 ]
